@@ -1,0 +1,58 @@
+name: Windows checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Run the full suite on the configured Windows 11 build 26200 runner
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install Rust checks
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy --no-self-update
+          if ($LASTEXITCODE -ne 0) { throw 'Rust installation failed' }
+          rustup default stable
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain selection failed' }
+      - name: Format, build, lint, document, and test portable Windows behavior
+        shell: pwsh
+        run: ./test-support/check.ps1 -Portable
+      - name: Check dependency advisories, licenses, and sources
+        shell: pwsh
+        run: ./test-support/dependencies.ps1
+
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    runs-on: [self-hosted, Windows, X64, stork-26200]
+    timeout-minutes: 20
+    env:
+      STORK_REQUIRE_TOOLS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify the supported host and run the full suite
+        shell: powershell
+        run: |
+          if ([Environment]::OSVersion.Version.Build -ne 26200) {
+            throw 'The live runner must use Windows build 26200'
+          }
+          ./test-support/check.ps1

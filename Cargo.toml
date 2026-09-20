@@ -1,0 +1,56 @@
+[package]
+name = "stork"
+version = "0.1.0"
+edition = "2024"
+license = "BSD-2-Clause"
+authors = ["Gabriela Cristei <cristei.g772@gmail.com>"]
+description = "Borrowed-handle Windows x64 DLL injection"
+
+[workspace]
+members = [".", "test-payload", "test-target"]
+default-members = [".", "test-payload", "test-target"]
+resolver = "3"
+
+[dependencies]
+dataview = "1.0.2"
+pelite = { version = "=0.10.0", default-features = false, features = ["derive_pod"] }
+thiserror = "2"
+wincorda = "=0.3.0"
+winapi = { version = "0.3.9", features = [
+    "errhandlingapi",
+    "fileapi",
+    "handleapi",
+    "libloaderapi",
+    "memoryapi",
+    "minwindef",
+    "ntdef",
+    "processthreadsapi",
+    "psapi",
+    "synchapi",
+    "sysinfoapi",
+    "tlhelp32",
+    "winbase",
+    "winerror",
+    "winnt",
+    "wow64apiset",
+] }
+
+[dev-dependencies]
+serial_test = "3"
+winapi = { version = "0.3.9", features = [
+    "debugapi",
+    "jobapi2",
+    "errhandlingapi",
+    "handleapi",
+    "memoryapi",
+    "minwinbase",
+    "minwindef",
+    "processthreadsapi",
+    "psapi",
+    "synchapi",
+    "winbase",
+    "winnt",
+] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-pc-windows-msvc"]

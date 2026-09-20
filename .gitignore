@@ -1,0 +1,21 @@
+# Build output of the workspace (stork, fixtures, test artifacts)
+/target/
+
+# Old rustfmt backups
+**/*.rs.bk
+
+# Local environment overrides
+.env
+.env.*
+*.local
+
+# Editors
+.vscode/
+.idea/
+*.iml
+*.swp
+*~
+
+# Windows shell noise
+Thumbs.db
+Desktop.ini
