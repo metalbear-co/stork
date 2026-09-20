@@ -262,13 +262,17 @@ incomplete snapshots, and vanished threads are reported as ambiguous.
 
 ## Compatibility scope
 
-The crate is built and tested on Windows 11 build 26200, native AMD64.
+The crate is built and tested on Windows 11 build 26200, native AMD64. The
+startup exception is also permitted on Windows Server 2025 build 26100, where
+the mirrord Windows layer test suite exercises it in continuous integration.
 
 A fresh `CREATE_SUSPENDED` child maps only the executable and `ntdll.dll`.
 Remote-thread injection into such a child is an empirically tested startup
-case on that build. The crate resolves `LoadLibraryW` inside the target
-whenever its module is mapped. For a never-run child on the tested build, the
-crate uses the documented startup exception. Other hosts return
+case on those builds. The crate resolves `LoadLibraryW` inside the target
+whenever its module is mapped. For a never-run child on a tested build, the
+crate uses the documented startup exception, and it still requires the module
+at that address to be `%SystemRoot%\System32\kernel32.dll` and its remote
+region to be free and large enough for the image. Other hosts return
 `StrategyUnavailable` instead of an unverified address.
 
 Architecture checks use `IsWow64Process2` (Windows 10 and later). x86 and

@@ -49,7 +49,7 @@ const INITIAL_MODULE_CAPACITY: usize = 256;
 const MAX_MODULE_LIST_BYTES: usize = 1024 * 1024;
 const LOAD_LIBRARY_PROBE_BYTES: usize = 32;
 const TESTED_STARTUP_MAJOR_VERSION: u32 = 10;
-const TESTED_STARTUP_BUILD: u32 = 26200;
+const TESTED_STARTUP_BUILDS: [u32; 2] = [26200, 26100];
 const EXECUTABLE_PROTECTION: DWORD =
     PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
 
@@ -545,9 +545,10 @@ pub(crate) fn load_library_address(target: &Target, strategy: Strategy) -> Resul
             return Ok(address);
         }
     }
-    // Tested startup exception: Windows 11 build 26200, native AMD64, never-run child.
-    // The startup loader maps the system image before dispatch. This is an empirical
-    // compatibility scope, not a Windows API guarantee. Refuse other builds and collisions.
+    // Tested startup exception: Windows 11 build 26200 and Windows Server 2025 build
+    // 26100, native AMD64, never-run child. The startup loader maps the system image
+    // before dispatch. This is an empirical compatibility scope, not a Windows API
+    // guarantee. Refuse other builds and collisions.
     if target.loader_state == LoaderState::NotStarted && tested_startup_build() {
         let system =
             std::env::var_os("SystemRoot").ok_or(Error::InvalidTarget("SystemRoot is missing"))?;
@@ -594,7 +595,7 @@ fn tested_startup_build() -> bool {
         v.dwOSVersionInfoSize = size_of::<RTL_OSVERSIONINFOW>() as u32;
         f(&mut v) == 0
             && v.dwMajorVersion == TESTED_STARTUP_MAJOR_VERSION
-            && v.dwBuildNumber == TESTED_STARTUP_BUILD
+            && TESTED_STARTUP_BUILDS.contains(&v.dwBuildNumber)
     }
 }
 
