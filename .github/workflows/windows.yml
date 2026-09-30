@@ -4,6 +4,14 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "GitHub-hosted runner label to run the suite on"
+        type: choice
+        default: windows-latest
+        options:
+          - windows-latest
+          - windows-2022
 
 permissions:
   contents: read
@@ -16,22 +24,21 @@ env:
 
 jobs:
   windows:
-    # The same runner as mirrord's Windows tests: Windows Server 2025, build 26100.
-    runs-on: windows-latest
+    # Defaults to windows-latest (the runner mirrord's Windows tests use, currently
+    # Windows Server 2025, build 26100). A workflow_dispatch run can select
+    # windows-2022 to exercise the suite on an older Windows build.
+    runs-on: ${{ github.event.inputs.runner || 'windows-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: Verify the runner is a tested build
+      - name: Report the runner Windows build
         shell: pwsh
         run: |
-          # The startup exception, and the tests that exercise it, need a tested build.
-          $build = [Environment]::OSVersion.Version.Build
-          Write-Host "Windows build $build"
-          if ($build -notin 26100, 26200) {
-            throw "Windows build $build is outside the tested startup builds"
-          }
+          # The startup exception now applies on every Windows version; this is
+          # informational only and no longer gates the run.
+          Write-Host "Windows build $([Environment]::OSVersion.Version.Build)"
       - uses: metalbear-co/setup-rust-toolchain@a8d42d5aa259519dac1faeee20e37c1fb43453a3
         with:
           cache: false

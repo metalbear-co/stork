@@ -25,7 +25,8 @@ try {
         $env:RUSTDOCFLAGS = $previousRustdocFlags
     }
     if ($Portable) {
-        # IAT does not use the build-specific startup LoadLibrary address exception.
+        # A reduced run centered on IAT, which does not rely on the startup
+        # LoadLibrary address exception; the load_library tests are skipped.
         Invoke-Checked -Program cargo -Arguments @('test', '--locked', '-p', 'stork', '--lib', '--', '--test-threads=1', '--skip', 'strategy::load_library::tests')
         Invoke-Checked -Program cargo -Arguments @('test', '--locked', '-p', 'stork', '--test', 'harness', '--', '--test-threads=1')
         Invoke-Checked -Program cargo -Arguments @('test', '--locked', '-p', 'stork', '--test', 'import_table', '--test', 'gates', '--', '--test-threads=1')
