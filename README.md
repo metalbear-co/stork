@@ -264,7 +264,8 @@ incomplete snapshots, and vanished threads are reported as ambiguous.
 
 The crate is built and tested on Windows 11 build 26200, native AMD64. The
 startup exception is also permitted on Windows Server 2025 build 26100, where
-the mirrord Windows layer test suite exercises it in continuous integration.
+continuous integration runs the complete suite and the mirrord Windows layer
+test suite exercises it.
 
 A fresh `CREATE_SUSPENDED` child maps only the executable and `ntdll.dll`.
 Remote-thread injection into such a child is an empirically tested startup

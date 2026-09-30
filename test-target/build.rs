@@ -27,8 +27,14 @@ fn main() {
     println!("cargo:rerun-if-changed=mscoree.def");
     println!("cargo:rerun-if-changed=../test-support/process.rs");
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
-    // OUT_DIR = target/<profile>/build/<pkg>-<hash>/out
-    let profile = out.ancestors().nth(3).expect("profile dir").to_path_buf();
+    // OUT_DIR = target/<profile>/build/<pkg>-<hash>/out, or
+    // target/<profile>/build/<pkg>/<hash>/out with the newer build directory layout.
+    let profile = out
+        .ancestors()
+        .find(|dir| dir.file_name().is_some_and(|name| name == "build"))
+        .and_then(std::path::Path::parent)
+        .expect("profile dir")
+        .to_path_buf();
     let compiler = cc::Build::new().cargo_metadata(false).get_compiler();
     let envs: Vec<_> = compiler.env().to_vec();
     let cl = compiler.path().to_path_buf();

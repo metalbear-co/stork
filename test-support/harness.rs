@@ -29,17 +29,29 @@ pub fn profile() -> &'static str {
     }
 }
 
+/// The Cargo profile directory that holds this test executable. Cargo places
+/// it in `<profile>/deps/`, or in `<profile>/build/<package>/<hash>/out/` with
+/// the newer build directory layout.
+fn test_profile_dir() -> std::path::PathBuf {
+    let executable = std::env::current_exe().expect("test executable path");
+    executable
+        .ancestors()
+        .skip(1)
+        .find(|dir| {
+            dir.file_name()
+                .is_some_and(|name| name == "deps" || name == "build")
+        })
+        .and_then(std::path::Path::parent)
+        .expect("test profile directory")
+        .to_path_buf()
+}
+
 /// Ask Cargo to check fixture freshness once per test executable, including
-/// when old artifacts already exist. Locate artifacts next to this test's deps
+/// when old artifacts already exist. Locate artifacts in this test's profile
 /// directory to support custom target directories, triples, and profiles.
 fn build_fixtures() -> Fixtures {
     let workspace = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let executable = std::env::current_exe().expect("test executable path");
-    let target_dir = executable
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("test profile directory")
-        .to_path_buf();
+    let target_dir = test_profile_dir();
     {
         let mut command = std::process::Command::new(env!("CARGO"));
         command.current_dir(&workspace).args([
@@ -524,11 +536,7 @@ pub fn query_region(
 
 /// Directory for per-pid checkpoint files of real-target tests.
 pub fn real_target_dir() -> std::path::PathBuf {
-    let executable = std::env::current_exe().expect("test executable path");
-    let dir = executable
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("test profile directory")
+    let dir = test_profile_dir()
         .join("real_targets")
         .join(std::process::id().to_string());
     std::fs::create_dir_all(&dir).expect("real_targets dir");
