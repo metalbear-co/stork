@@ -4,55 +4,46 @@ on:
   push:
   pull_request:
   workflow_dispatch:
-    inputs:
-      live:
-        description: Run the full suite on the configured Windows 11 build 26200 runner
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
+env:
+  # The same toolchain mirrord builds this crate with (`PINNED_NIGHTLY` there).
+  RUST_TOOLCHAIN: nightly-2026-08-13
+  # Real-target tests must run, not skip, when a tool is missing.
+  STORK_REQUIRE_TOOLS: "1"
+
 jobs:
-  portable:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-2022, windows-2025]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+  windows:
+    # The same runner as mirrord's Windows tests: Windows Server 2025, build 26100.
+    runs-on: windows-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: Install Rust checks
+      - name: Verify the runner is a tested build
         shell: pwsh
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt --component clippy --no-self-update
-          if ($LASTEXITCODE -ne 0) { throw 'Rust installation failed' }
-          rustup default stable
-          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain selection failed' }
-      - name: Format, build, lint, document, and test portable Windows behavior
+          # The startup exception, and the tests that exercise it, need a tested build.
+          $build = [Environment]::OSVersion.Version.Build
+          Write-Host "Windows build $build"
+          if ($build -notin 26100, 26200) {
+            throw "Windows build $build is outside the tested startup builds"
+          }
+      - uses: metalbear-co/setup-rust-toolchain@a8d42d5aa259519dac1faeee20e37c1fb43453a3
+        with:
+          cache: false
+          components: rustfmt, clippy
+          target: x86_64-pc-windows-msvc
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          rustflags: ""
+      - name: Rust cache
+        uses: metalbear-co/rust-cache@d49d62d59c5755dd81754c833186b84a82f895fe # v2.9.1+1
+      - name: Format, build, lint, document, and test
         shell: pwsh
-        run: ./test-support/check.ps1 -Portable
+        run: ./test-support/check.ps1
       - name: Check dependency advisories, licenses, and sources
         shell: pwsh
         run: ./test-support/dependencies.ps1
-
-  live:
-    if: github.event_name == 'workflow_dispatch' && inputs.live
-    runs-on: [self-hosted, Windows, X64, stork-26200]
-    timeout-minutes: 20
-    env:
-      STORK_REQUIRE_TOOLS: '1'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Verify the supported host and run the full suite
-        shell: powershell
-        run: |
-          if ([Environment]::OSVersion.Version.Build -ne 26200) {
-            throw 'The live runner must use Windows build 26200'
-          }
-          ./test-support/check.ps1
