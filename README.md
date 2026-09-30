@@ -262,18 +262,20 @@ incomplete snapshots, and vanished threads are reported as ambiguous.
 
 ## Compatibility scope
 
-The crate is built and tested on Windows 11 build 26200, native AMD64. The
-startup exception is also permitted on Windows Server 2025 build 26100, where
-continuous integration runs the complete suite and the mirrord Windows layer
-test suite exercises it.
+The crate is developed on Windows 11 build 26200, native AMD64. Continuous
+integration runs the complete suite on Windows Server 2025 build 26100 (the
+runner mirrord's Windows tests use) and is also exercised on Windows Server
+2022. The startup exception applies on every supported Windows version.
 
-A fresh `CREATE_SUSPENDED` child maps only the executable and `ntdll.dll`.
-Remote-thread injection into such a child is an empirically tested startup
-case on those builds. The crate resolves `LoadLibraryW` inside the target
-whenever its module is mapped. For a never-run child on a tested build, the
-crate uses the documented startup exception, and it still requires the module
-at that address to be `%SystemRoot%\System32\kernel32.dll` and its remote
-region to be free and large enough for the image. Other hosts return
+A fresh `CREATE_SUSPENDED` child maps only the executable and `ntdll.dll`, so
+`LoadLibraryW` is not yet resolvable inside it. The crate resolves `LoadLibraryW`
+inside the target whenever its module is mapped. For a never-run native AMD64
+child it instead forwards the local `LoadLibraryW` address. This rests on an
+empirical property, not a Windows API guarantee: system DLLs such as kernel32
+are mapped at the same base in every process of a boot session, which holds in
+practice on every supported Windows version. The crate still requires the module
+at that address to be `%SystemRoot%\System32\kernel32.dll` and its remote region
+to be free and large enough for the image. Other hosts return
 `StrategyUnavailable` instead of an unverified address.
 
 Architecture checks use `IsWow64Process2` (Windows 10 and later). x86 and

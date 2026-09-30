@@ -48,8 +48,6 @@ const MODULE_ENUMERATION_ATTEMPTS: usize = 5;
 const INITIAL_MODULE_CAPACITY: usize = 256;
 const MAX_MODULE_LIST_BYTES: usize = 1024 * 1024;
 const LOAD_LIBRARY_PROBE_BYTES: usize = 32;
-const TESTED_STARTUP_MAJOR_VERSION: u32 = 10;
-const TESTED_STARTUP_BUILDS: [u32; 2] = [26200, 26100];
 const EXECUTABLE_PROTECTION: DWORD =
     PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
 
@@ -545,11 +543,18 @@ pub(crate) fn load_library_address(target: &Target, strategy: Strategy) -> Resul
             return Ok(address);
         }
     }
-    // Tested startup exception: Windows 11 build 26200 and Windows Server 2025 build
-    // 26100, native AMD64, never-run child. The startup loader maps the system image
-    // before dispatch. This is an empirical compatibility scope, not a Windows API
-    // guarantee. Refuse other builds and collisions.
-    if target.loader_state == LoaderState::NotStarted && tested_startup_build() {
+    // Startup exception for a native AMD64 never-run child. Before the primary
+    // thread runs, only the executable and ntdll are mapped, so kernel32's
+    // LoadLibraryW is not yet resolvable inside the target, and the loop above
+    // finds no match. We forward the local LoadLibraryW address. This rests on
+    // an empirical property, not a Windows API guarantee: system DLLs such as
+    // kernel32 are mapped at the same base in every process of a boot session
+    // (ASLR randomizes the base per boot, not per process), which holds in
+    // practice on every Windows version stork supports. The safety checks below
+    // still apply and refuse anything outside that assumption: the module at
+    // that base must be %SystemRoot%\System32\kernel32.dll, and its region in
+    // the target must be free and large enough for the whole image.
+    if target.loader_state == LoaderState::NotStarted {
         let system =
             std::env::var_os("SystemRoot").ok_or(Error::InvalidTarget("SystemRoot is missing"))?;
         let expected = PathBuf::from(system).join("System32").join("kernel32.dll");
@@ -561,7 +566,7 @@ pub(crate) fn load_library_address(target: &Target, strategy: Strategy) -> Resul
         if normalized(&actual) != normalized(&expected) {
             return Err(Error::StrategyUnavailable {
                 strategy,
-                reason: "fresh-child forwarded LoadLibrary module is outside the tested scope",
+                reason: "fresh-child forwarded LoadLibrary module is not System32\\kernel32.dll",
             });
         }
         let region = query(target.process.cast(), base)?;
@@ -574,29 +579,8 @@ pub(crate) fn load_library_address(target: &Target, strategy: Strategy) -> Resul
     }
     Err(Error::StrategyUnavailable {
         strategy,
-        reason: "LoadLibrary implementation is absent in the target; startup address is not validated on this OS",
+        reason: "LoadLibrary implementation is absent in the target and the startup address could not be validated",
     })
-}
-
-fn tested_startup_build() -> bool {
-    unsafe {
-        let name: NullTerminated<WCHAR> = "ntdll.dll".into();
-        let ntdll = GetModuleHandleW(name.as_ptr());
-        if ntdll.is_null() {
-            return false;
-        }
-        let address = GetProcAddress(ntdll, c"RtlGetVersion".as_ptr());
-        if address.is_null() {
-            return false;
-        }
-        let f: unsafe extern "system" fn(PRTL_OSVERSIONINFOW) -> winapi::shared::ntdef::NTSTATUS =
-            std::mem::transmute(address);
-        let mut v: RTL_OSVERSIONINFOW = zeroed();
-        v.dwOSVersionInfoSize = size_of::<RTL_OSVERSIONINFOW>() as u32;
-        f(&mut v) == 0
-            && v.dwMajorVersion == TESTED_STARTUP_MAJOR_VERSION
-            && TESTED_STARTUP_BUILDS.contains(&v.dwBuildNumber)
-    }
 }
 
 #[cfg(test)]

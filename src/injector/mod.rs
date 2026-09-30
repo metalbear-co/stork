@@ -100,8 +100,13 @@ impl Injector {
     /// Do not reuse that assertion after an injection attempt. The payload must be trusted
     /// executable code that is compatible with the target. Self-injection is refused.
     ///
-    /// For the fresh-child startup exception, use Windows 11 build 26200 native AMD64 with
-    /// standard system DLL loading. Other absent-module cases return `StrategyUnavailable`.
+    /// For a native AMD64 never-run child, kernel32 is not yet mapped, so the
+    /// startup exception forwards the local `LoadLibraryW` address. This rests on
+    /// an empirical property, not a Windows API guarantee: system DLLs such as
+    /// kernel32 load at the same base in every process of a boot session, which
+    /// holds in practice on every supported Windows version. The forwarded module
+    /// must still be `System32\kernel32.dll` and its target region free and large
+    /// enough for the image; other absent-module cases return `StrategyUnavailable`.
     pub unsafe fn inject(
         &self,
         target: impl Into<Target>,
