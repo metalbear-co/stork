@@ -36,6 +36,9 @@ jobs:
         with:
           cache: false
           components: rustfmt, clippy
+          # The compile_fail doctests print expected errors that the matcher
+          # would otherwise annotate as failures on a passing run.
+          matcher: false
           target: x86_64-pc-windows-msvc
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           rustflags: ""
