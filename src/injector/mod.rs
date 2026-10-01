@@ -1,7 +1,10 @@
 //! Validate a payload and dispatch one explicit injection strategy.
 
 use crate::{Error, LoaderState, Result, Strategy, Target, payload::Payload, remote};
-use std::{ffi::c_void, path::Path};
+use std::{ffi::c_void, path::Path, time::Duration};
+
+/// How long [`Strategy::LoadLibraryRemoteThread`] waits for its remote thread by default.
+pub const DEFAULT_REMOTE_WAIT: Duration = Duration::from_secs(30);
 
 /// The point at which loading is confirmed or prepared.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,10 +30,20 @@ pub struct InjectedModule {
 }
 
 /// An explicit injection strategy. The default uses a remote LoadLibrary thread.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 #[must_use]
 pub struct Injector {
     strategy: Strategy,
+    remote_wait: Option<Duration>,
+}
+
+impl Default for Injector {
+    fn default() -> Self {
+        Self {
+            strategy: Strategy::default(),
+            remote_wait: Some(DEFAULT_REMOTE_WAIT),
+        }
+    }
 }
 
 impl Injector {
@@ -58,7 +71,27 @@ impl Injector {
 
     /// Create an injector using `strategy`, without automatic fallback.
     pub fn with_strategy(strategy: Strategy) -> Self {
-        Self { strategy }
+        Self {
+            strategy,
+            ..Self::default()
+        }
+    }
+
+    /// Set how long a remote LoadLibrary thread may run before injection returns
+    /// [`Error::RemoteTimeout`]. `None` waits until the thread ends.
+    ///
+    /// The default is [`DEFAULT_REMOTE_WAIT`]. Waiting indefinitely suits a payload whose
+    /// `DllMain` deliberately blocks, for example until a debugger attaches; it also means a
+    /// payload that never returns blocks the caller forever. Strategies that do not wait on a
+    /// remote thread ignore this setting.
+    pub fn with_remote_wait(mut self, remote_wait: Option<Duration>) -> Self {
+        self.remote_wait = remote_wait;
+        self
+    }
+
+    /// Return the remote-thread wait. `None` means it waits until the thread ends.
+    pub fn remote_wait(&self) -> Option<Duration> {
+        self.remote_wait
     }
 
     /// Return the selected strategy.
@@ -117,7 +150,9 @@ impl Injector {
         remote::validate(&target)?;
         let payload = Payload::load(dll_path.as_ref(), self.strategy)?;
         match self.strategy {
-            Strategy::LoadLibraryRemoteThread => crate::strategy::load_library(&target, &payload),
+            Strategy::LoadLibraryRemoteThread => {
+                crate::strategy::load_library(&target, &payload, self.remote_wait)
+            }
             Strategy::QueueUserApc => crate::strategy::queue_apc(&target, &payload),
             Strategy::ImportTableHijack => crate::strategy::import_table(&target, &payload),
         }
@@ -179,6 +214,21 @@ fn gate(strategy: Strategy, target: &Target) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_wait_defaults_and_overrides() {
+        assert_eq!(Injector::new().remote_wait(), Some(DEFAULT_REMOTE_WAIT));
+        assert_eq!(
+            Injector::queue_apc().remote_wait(),
+            Some(DEFAULT_REMOTE_WAIT)
+        );
+        assert_eq!(Injector::new().with_remote_wait(None).remote_wait(), None);
+        let short = std::time::Duration::from_millis(250);
+        assert_eq!(
+            Injector::new().with_remote_wait(Some(short)).remote_wait(),
+            Some(short)
+        );
+    }
 
     #[test]
     fn state_gates() {

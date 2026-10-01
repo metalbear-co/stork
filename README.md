@@ -222,7 +222,8 @@ fn report_injection_error(error: &Error) {
 }
 ```
 
-The remote-thread wait has a 30-second limit. `RemoteTimeout` and
+The remote-thread wait has a 30-second limit by default; `Injector::with_remote_wait`
+changes it, and `None` waits until the thread ends. `RemoteTimeout` and
 `RemotePending` retain the path allocation and leave the remote thread running;
 neither cancels the load. APC success also retains its path until process exit.
 
