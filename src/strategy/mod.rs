@@ -10,7 +10,8 @@ pub(crate) use queue_apc::inject as queue_apc;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Strategy {
-    /// Start a remote LoadLibrary thread and wait up to 30 seconds.
+    /// Start a remote LoadLibrary thread and wait for it, up to
+    /// [`Injector::with_remote_wait`](crate::Injector::with_remote_wait) (30 seconds by default).
     #[default]
     LoadLibraryRemoteThread,
     /// Queue LoadLibrary on the caller-attested never-run primary thread.

@@ -7,16 +7,32 @@ use crate::{
     target::Handle,
 };
 
-use std::{path::Path, ptr::null_mut};
+use std::{path::Path, ptr::null_mut, time::Duration};
 use winapi::{
     shared::winerror::WAIT_TIMEOUT,
     um::{
-        processthreadsapi::CreateRemoteThread, synchapi::WaitForSingleObject,
-        winbase::WAIT_OBJECT_0,
+        processthreadsapi::CreateRemoteThread,
+        synchapi::WaitForSingleObject,
+        winbase::{INFINITE, WAIT_OBJECT_0},
     },
 };
-pub(crate) fn inject(target: &Target, payload: &Payload) -> Result<InjectedModule> {
-    inject_timeout(target, payload.path(), 30_000)
+pub(crate) fn inject(
+    target: &Target,
+    payload: &Payload,
+    remote_wait: Option<Duration>,
+) -> Result<InjectedModule> {
+    inject_timeout(target, payload.path(), wait_millis(remote_wait))
+}
+
+/// The `WaitForSingleObject` timeout for `remote_wait`: `None` waits indefinitely, and a finite
+/// wait never rounds up to `INFINITE`.
+fn wait_millis(remote_wait: Option<Duration>) -> u32 {
+    match remote_wait {
+        None => INFINITE,
+        Some(wait) => u32::try_from(wait.as_millis())
+            .unwrap_or(INFINITE)
+            .min(INFINITE - 1),
+    }
 }
 fn inject_timeout(target: &Target, path: &Path, timeout: u32) -> Result<InjectedModule> {
     inject_with_wait(target, path, |thread, _| {
@@ -78,6 +94,18 @@ mod tests {
     use crate::target::Handle;
 
     include!("../../test-support/harness.rs");
+
+    #[test]
+    fn remote_wait_maps_to_a_thread_wait() {
+        assert_eq!(wait_millis(None), INFINITE);
+        assert_eq!(wait_millis(Some(Duration::from_secs(30))), 30_000);
+        assert_eq!(wait_millis(Some(Duration::ZERO)), 0);
+        // A finite wait never becomes an infinite one.
+        assert_eq!(
+            wait_millis(Some(Duration::from_secs(u64::MAX))),
+            INFINITE - 1
+        );
+    }
 
     fn spawn_suspended_cmd() -> Child {
         Child::spawn(std::path::Path::new(r"C:\Windows\System32\cmd.exe"))
